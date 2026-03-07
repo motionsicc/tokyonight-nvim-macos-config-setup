@@ -6,7 +6,7 @@ if not vim.loop.fs_stat(lazypath) then
     "git",
     "clone",
     "--filter=blob:none",
-    "https://github.com", -- Fixed your URL here too
+    "https://github.com/folke/lazy.nvim.git",
     "--branch=stable",
     lazypath,
   })
@@ -29,7 +29,7 @@ require("lazy").setup({
     end,
   },
 
-  -- THE NEW DIAGNOSTIC PLUGIN (Now in the right place!)
+  -- THE NEW DIAGNOSTIC PLUGIN
   {
     "rachartier/tiny-inline-diagnostic.nvim",
     event = "VeryLazy",
@@ -120,6 +120,30 @@ require("lazy").setup({
   },
 })
 
+-- ===== CLIPBOARD & MACOS SHORTCUTS =====
+-- Use system clipboard by default (pbcopy/pbpaste)
+vim.opt.clipboard = "unnamedplus"
+
+-- Copy/Cut/Paste (Normal & Visual)
+vim.keymap.set("v", "<M-c>", '"+y', { noremap = true, silent = true }) -- Copy
+vim.keymap.set("v", "<M-x>", '"+d', { noremap = true, silent = true }) -- Cut
+vim.keymap.set("n", "<M-v>", '"+p', { noremap = true, silent = true }) -- Paste (Normal)
+vim.keymap.set("i", "<M-v>", '<C-r>+', { noremap = true, silent = true }) -- Paste (Insert)
+
+-- Undo/Redo (Normal & Insert)
+vim.keymap.set({ "n", "i" }, "<M-z>", "<Cmd>undo<CR>", { noremap = true, silent = true })
+vim.keymap.set({ "n", "i" }, "<M-Z>", "<Cmd>redo<CR>", { noremap = true, silent = true })
+
+-- Select All (Option + a)
+vim.keymap.set({ "n", "i" }, "<M-a>", "<Esc>ggVG", { noremap = true, silent = true })
+
+-- FIND & SEARCH (Option + f)
+-- Drops to normal mode if needed and starts search (/)
+vim.keymap.set({ "n", "i", "v" }, "<M-f>", "<Esc>/", { noremap = true, silent = true })
+-- Clear highlights on Escape (like a modern editor)
+vim.keymap.set("n", "<Esc>", ":noh<CR><Esc>", { noremap = true, silent = true })
+
+
 -- ===== Smart Build/Run Setup (MACOS OPTION KEY VERSION) =====
 local last_built_exe = ""
 
@@ -170,7 +194,7 @@ end, { noremap = true, silent = true })
 -- Open Mason with <leader>m
 vim.keymap.set("n", "<leader>m", ":Mason<CR>", { noremap = true, silent = true })
 
--- Force close terminal with Option-X
+-- Force close terminal with Option-X (Terminal Mode)
 vim.keymap.set('t', '<M-x>', [[<C-\><C-n>:q<CR>]], { noremap = true, silent = true })
 
 -- Global Options
@@ -179,4 +203,4 @@ vim.opt.relativenumber = false
 vim.opt.tabstop = 4      
 vim.opt.softtabstop = 4  
 vim.opt.shiftwidth = 4   
-vim.opt.expandtab = true 
+vim.opt.expandtab = true
