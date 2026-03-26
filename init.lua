@@ -1,7 +1,8 @@
 -- Bootstrap lazy.nvim
+vim.opt.title = true
+vim.opt.titlestring = " nvim"
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-
-if not vim.loop.fs_stat(lazypath) then
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
   vim.fn.system({
     "git",
     "clone",
@@ -11,14 +12,12 @@ if not vim.loop.fs_stat(lazypath) then
     lazypath,
   })
 end
-
 vim.opt.rtp:prepend(lazypath)
 
--- Disable default virtual text so the new plugin can shine
+-- Disable default virtual text
 vim.diagnostic.config({ virtual_text = false })
 
 require("lazy").setup({
-
   -- Theme
   {
     "folke/tokyonight.nvim",
@@ -26,6 +25,45 @@ require("lazy").setup({
     config = function()
       vim.g.tokyonight_style = "storm"
       vim.cmd.colorscheme("tokyonight")
+    end,
+  },
+
+  -- EMMET (Trigger: Option + e followed by ,)
+  {
+    "mattn/emmet-vim",
+    ft = { "html", "css", "javascript" },
+    config = function()
+      vim.g.user_emmet_leader_key = '<M-e>'
+    end,
+  },
+
+  -- THE SMEAR CURSOR PLUGIN
+  {
+    "sphamba/smear-cursor.nvim",
+    opts = {
+      cursor_color = "#7aa2f7",
+      stiffness = 0.6,
+      trailing_stiffness = 0.3,
+    },
+  },
+
+  -- AUTO-CLOSE HTML TAGS
+  {
+    "windwp/nvim-ts-autotag",
+    config = function()
+      require('nvim-ts-autotag').setup()
+    end,
+  },
+
+  -- AUTO-CLOSE BRACKETS/PARENS (C++, C, Rust, Python)
+  {
+    "windwp/nvim-autopairs",
+    event = "InsertEnter",
+    config = function()
+      require("nvim-autopairs").setup({})
+      local cmp_autopairs = require("nvim-autopairs.completion.cmp")
+      local cmp = require("cmp")
+      cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
     end,
   },
 
@@ -47,45 +85,101 @@ require("lazy").setup({
       local ok, ts = pcall(require, "nvim-treesitter.configs")
       if ok then
         ts.setup({
-          ensure_installed = { "c", "cpp", "python", "rust" },
+          ensure_installed = { "c", "cpp", "python", "rust", "html", "css", "javascript" },
           highlight = { enable = true },
         })
       end
     end,
   },
 
-  -- LSP
+  -- LSP & COMPLETION ENGINE
   {
     "neovim/nvim-lspconfig",
     dependencies = {
       "williamboman/mason.nvim",
       "williamboman/mason-lspconfig.nvim",
+      "hrsh7th/nvim-cmp",
+      "hrsh7th/cmp-nvim-lsp",
+      "hrsh7th/cmp-buffer",
+      "hrsh7th/cmp-path",
+      "L3MON4D3/LuaSnip",
+      "saadparwaiz1/cmp_luasnip",
     },
     config = function()
       require("mason").setup()
+      
+      local cmp = require("cmp")
+      local capabilities = require("cmp_nvim_lsp").default_capabilities()
+
+      local kind_icons = {
+        Text = "", Method = "󰆧", Function = "󰊕", Constructor = "", Field = "󰇵",
+        Variable = "󰂡", Class = "󰠱", Interface = "", Module = "", Property = "󰜢",
+        Unit = "", Value = "󰎟", Enum = "", Keyword = "󰌋", Snippet = "",
+        Color = "󰏘", File = "󰈙", Reference = "", Folder = "󰉋", EnumMember = "",
+        Constant = "󰏿", Struct = "", Event = "", Operator = "󰆕", TypeParameter = "󰅲",
+      }
+
+      cmp.setup({
+        snippet = {
+          expand = function(args) require("luasnip").lsp_expand(args.body) end,
+        },
+        formatting = {
+          format = function(entry, vim_item)
+            vim_item.kind = string.format('%s %s', kind_icons[vim_item.kind], vim_item.kind)
+            vim_item.menu = ({
+              nvim_lsp = "[LSP]",
+              luasnip = "[Snippet]",
+              buffer = "[Buffer]",
+              path = "[Path]",
+            })[entry.source.name]
+            return vim_item
+          end,
+        },
+        mapping = cmp.mapping.preset.insert({
+          ["<M-b>"] = cmp.mapping.scroll_docs(-4),
+          ["<M-f>"] = cmp.mapping.scroll_docs(4),
+          ["<M-Space>"] = cmp.mapping.complete(),
+          ["<CR>"] = cmp.mapping.confirm({ select = true }),
+          ["<Tab>"] = cmp.mapping(function(fallback)
+            if cmp.visible() then cmp.select_next_item() else fallback() end
+          end, { "i", "s" }),
+          ["<S-Tab>"] = cmp.mapping(function(fallback)
+            if cmp.visible() then cmp.select_prev_item() else fallback() end
+          end, { "i", "s" }),
+        }),
+        sources = cmp.config.sources({
+          { name = "nvim_lsp" },
+          { name = "luasnip" },
+          { name = "path" },
+        }, {
+          { name = "buffer" },
+        }),
+      })
+
       require("mason-lspconfig").setup({
-        ensure_installed = { "clangd", "pyright", "rust_analyzer" },
+        ensure_installed = { "clangd", "pyright", "rust_analyzer", "html", "cssls", "ts_ls" },
         handlers = {
           function(server_name)
-            local opts = {}
+            local opts = { capabilities = capabilities }
             if server_name == "clangd" then
-              opts = {
-                cmd = {
-                  "clangd",
-                  "--query-driver=*", 
-                  "--background-index",
-                  "--clang-tidy",
-                  "--header-insertion=never",
-                },
+              opts.cmd = {
+                "clangd",
+                "--background-index",
+                "--clang-tidy",
+                "--header-insertion=never",
+                "--query-driver=*",
               }
             end
             require("lspconfig")[server_name].setup(opts)
           end,
         },
       })
-      -- Keymaps for help/errors
+
+      -- LSP Keybinds
       vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, { desc = "Show line error" })
-      vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = "LSP Code Actions / Fix-it" })
+      vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = "LSP Code Actions" })
+      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = "Show documentation" })
+      vim.keymap.set('n', '<leader>m', ':Mason<CR>', { noremap = true, silent = true })
     end,
   },
 
@@ -94,9 +188,7 @@ require("lazy").setup({
     "nvim-lualine/lualine.nvim",
     dependencies = { "nvim-tree/nvim-web-devicons" },
     config = function()
-      require("lualine").setup({
-        options = { theme = "tokyonight" },
-      })
+      require("lualine").setup({ options = { theme = "tokyonight" } })
     end,
   },
 
@@ -107,100 +199,125 @@ require("lazy").setup({
     config = function()
       require("nvim-tree").setup({
         sort_by = "name",
-        renderer = {
-          icons = { show = { file = true, folder = true, git = true } },
-        },
-        view = {
-          width = 30,
-          side = "left",
-        },
+        view = { width = 30, side = "left" },
       })
       vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", { noremap = true, silent = true })
+    end,
+  },
+
+  -- Dashboard
+  {
+    "nvimdev/dashboard-nvim",
+    event = "VimEnter",
+    config = function()
+      require('dashboard').setup {
+        theme = 'doom',
+        config = {
+          header = {
+            "",
+            " ███╗   ███╗ ██████╗ ████████╗██╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗ ██████╗ ⚡️ ",
+            " ████╗ ████║██╔═══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║██╔════╝██║██╔════╝██╔════╝    ",
+            " ██╔████╔██║██║   ██║   ██║   ██║██║   ██║██╔██╗ ██║███████╗██║██║      ██║         ",
+            " ██║╚██╔╝██║██║   ██║   ██║   ██║██║   ██║██║╚██╗██║╚════██║██║██║      ██║         ",
+            " ██║ ╚═╝ ██║╚██████╔╝   ██║   ██║╚██████╔╝██║ ╚████║███████║██║╚██████╗╚██████╗ ⚡️ ",
+            " ╚═╝     ╚═╝ ╚═════╝    ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═╝ ╚═════╝ ╚═════╝    ",
+            "",
+          },
+          center = {
+            { action = 'NvimTreeToggle', desc = ' File Explorer', icon = '󰙅 ', key = 'e' },
+            { action = 'e $MYVIMRC',    desc = ' Open Config',   icon = ' ', key = 'c' },
+            { action = 'qa',             desc = ' Quit',          icon = '󰈆 ', key = 'q' },
+          },
+        }
+      }
     end,
   },
 })
 
 -- ===== CLIPBOARD & MACOS SHORTCUTS =====
--- Use system clipboard by default (pbcopy/pbpaste)
 vim.opt.clipboard = "unnamedplus"
-
--- Copy/Cut/Paste (Normal & Visual)
-vim.keymap.set("v", "<M-c>", '"+y', { noremap = true, silent = true }) -- Copy
-vim.keymap.set("v", "<M-x>", '"+d', { noremap = true, silent = true }) -- Cut
-vim.keymap.set("n", "<M-v>", '"+p', { noremap = true, silent = true }) -- Paste (Normal)
-vim.keymap.set("i", "<M-v>", '<C-r>+', { noremap = true, silent = true }) -- Paste (Insert)
-
--- Undo/Redo (Normal & Insert)
+vim.keymap.set("v", "<M-c>", '"+y', { noremap = true, silent = true })
+vim.keymap.set("v", "<M-x>", '"+d', { noremap = true, silent = true })
+vim.keymap.set({ "n", "v" }, "<M-v>", '"+p', { noremap = true, silent = true })
+vim.keymap.set("i", "<M-v>", '<C-r>+', { noremap = true, silent = true })
 vim.keymap.set({ "n", "i" }, "<M-z>", "<Cmd>undo<CR>", { noremap = true, silent = true })
 vim.keymap.set({ "n", "i" }, "<M-Z>", "<Cmd>redo<CR>", { noremap = true, silent = true })
-
--- Select All (Option + a)
 vim.keymap.set({ "n", "i" }, "<M-a>", "<Esc>ggVG", { noremap = true, silent = true })
-
--- FIND & SEARCH (Option + f)
--- Drops to normal mode if needed and starts search (/)
 vim.keymap.set({ "n", "i", "v" }, "<M-f>", "<Esc>/", { noremap = true, silent = true })
--- Clear highlights on Escape (like a modern editor)
 vim.keymap.set("n", "<Esc>", ":noh<CR><Esc>", { noremap = true, silent = true })
 
-
--- ===== Smart Build/Run Setup (MACOS OPTION KEY VERSION) =====
+-- ===== SPLIT SCREEN TERMINAL LOGIC =====
 local last_built_exe = ""
-
--- Smart Build (Option+B)
-vim.keymap.set("n", "<M-b>", function()
-  vim.cmd("w") 
-  local ft = vim.bo.filetype
-  local file = vim.fn.expand("%:p")
-  last_built_exe = vim.fn.expand("%:p:r")
-
-  if ft == "cpp" then
-    vim.cmd("botright split | resize 12")
-    vim.cmd(string.format("terminal g++ -std=c++23 -Wall -Wextra \"%s\" -o \"%s\"", file, last_built_exe))
-  elseif ft == "c" then
-    vim.cmd("botright split | resize 12")
-    vim.cmd(string.format("terminal gcc -std=c17 -Wall -Wextra \"%s\" -o \"%s\"", file, last_built_exe))
-  elseif ft == "rust" then
-    vim.cmd("botright split | resize 12")
-    vim.cmd(string.format("terminal rustc \"%s\" -o \"%s\"", file, last_built_exe))
-  elseif ft == "python" then
-    print("Python is interpreted; no build needed! Use Option+R to run.")
-  else
-    print("Build not configured for filetype: " .. ft)
-  end
-end, { noremap = true, silent = true })
-
--- Smart Run (Option+R)
-vim.keymap.set("n", "<M-r>", function()
-  local ft = vim.bo.filetype
-  local file = vim.fn.expand("%:p")
-
-  if ft == "cpp" or ft == "c" or ft == "rust" then
-    if last_built_exe == "" then last_built_exe = vim.fn.expand("%:p:r") end
-    if vim.fn.filereadable(last_built_exe) == 1 then
-      vim.cmd("botright split | resize 12")
-      vim.cmd("terminal ./" .. vim.fn.fnamemodify(last_built_exe, ":t"))
+local function open_right_terminal(cmd)
+    vim.cmd("rightbelow vsplit")
+    vim.cmd("vertical resize 65")
+    if cmd then
+        vim.cmd("terminal " .. cmd)
     else
-      print("Error: No executable found. Build first with Option+B.")
+        vim.cmd("terminal")
     end
-  elseif ft == "python" then
-    vim.cmd("botright split | resize 12")
-    vim.cmd("terminal python3 \"" .. file .. "\"")
-  else
-    print("Run not configured for filetype: " .. ft)
-  end
+    vim.cmd("startinsert") 
+end
+
+-- ===== WEB DEVELOPMENT SHORTCUTS (SAFARI) =====
+-- Option + L: Start Live Server using Safari
+vim.keymap.set("n", "<M-l>", function()
+    vim.cmd("w") -- Auto-save
+    local path = vim.fn.expand("%:p:h")
+    open_right_terminal("cd \"" .. path .. "\" && live-server --browser=\"safari\"")
+end, { noremap = true, silent = true, desc = "Live Server (Safari)" })
+
+-- Option + Shift + L: Quick Static Preview in Safari
+vim.keymap.set("n", "<M-L>", function()
+    vim.cmd("w") -- Auto-save
+    vim.cmd("silent !open -a Safari %")
+end, { noremap = true, silent = true, desc = "Safari Preview" })
+
+-- ===== BUILD & RUN LOGIC (C++, Python, Rust) =====
+-- Build Shortcut (Option + B)
+vim.keymap.set("n", "<M-b>", function()
+    vim.cmd("w") -- Auto-save
+    local ft = vim.bo.filetype
+    local file = vim.fn.expand("%:p")
+    last_built_exe = vim.fn.expand("%:p:r")
+    if ft == "cpp" then
+        open_right_terminal(string.format("g++ -std=c++23 -Wall -Wextra \"%s\" -o \"%s\"", file, last_built_exe))
+    elseif ft == "c" then
+        open_right_terminal(string.format("gcc -std=c17 -Wall -Wextra \"%s\" -o \"%s\"", file, last_built_exe))
+    elseif ft == "rust" then
+        open_right_terminal(string.format("rustc \"%s\" -o \"%s\"", file, last_built_exe))
+    end
 end, { noremap = true, silent = true })
 
--- Open Mason with <leader>m
-vim.keymap.set("n", "<leader>m", ":Mason<CR>", { noremap = true, silent = true })
+-- Run Shortcut (Option + R)
+vim.keymap.set("n", "<M-r>", function()
+    vim.cmd("w") -- Auto-save
+    local ft = vim.bo.filetype
+    local file = vim.fn.expand("%:p")
+    if ft == "cpp" or ft == "c" or ft == "rust" then
+        if last_built_exe == "" then last_built_exe = vim.fn.expand("%:p:r") end
+        if vim.fn.filereadable(last_built_exe) == 1 then
+            open_right_terminal('"' .. last_built_exe .. '"')
+        else
+            print("Error: Build first with Option+B.")
+        end
+    elseif ft == "python" then
+        open_right_terminal("python3 \"" .. file .. "\"")
+    end
+end, { noremap = true, silent = true })
 
--- Force close terminal with Option-X (Terminal Mode)
-vim.keymap.set('t', '<M-x>', [[<C-\><C-n>:q<CR>]], { noremap = true, silent = true })
+-- ===== TERMINAL MANAGEMENT =====
+-- Option + K: Kill the terminal/split (Terminal Mode)
+vim.keymap.set('t', '<M-k>', [[<C-\><C-n>:q!<CR>]], { noremap = true, silent = true })
+vim.keymap.set("n", "<leader>t", function() open_right_terminal() end, { noremap = true, silent = true })
 
 -- Global Options
-vim.opt.number = true         
-vim.opt.relativenumber = false 
-vim.opt.tabstop = 4      
-vim.opt.softtabstop = 4  
-vim.opt.shiftwidth = 4   
+vim.opt.number = true
+vim.opt.tabstop = 4
+vim.opt.softtabstop = 4
+vim.opt.shiftwidth = 4
 vim.opt.expandtab = true
+
+-- VSCODE-STYLE AUTOSAVE
+vim.opt.autowrite = true
+vim.opt.autowriteall = true
