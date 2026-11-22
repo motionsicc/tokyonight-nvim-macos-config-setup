@@ -168,6 +168,8 @@ require("lazy").setup({
                 "--clang-tidy",
                 "--header-insertion=never",
                 "--query-driver=*",
+                -- MacOS Raylib Header Support
+                "-I/opt/homebrew/include",
               }
             end
             require("lspconfig")[server_name].setup(opts)
@@ -217,8 +219,8 @@ require("lazy").setup({
             "",
             " ███╗   ███╗ ██████╗ ████████╗██╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗ ██████╗ ⚡️ ",
             " ████╗ ████║██╔═══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║██╔════╝██║██╔════╝██╔════╝    ",
-            " ██╔████╔██║██║   ██║   ██║   ██║██║   ██║██╔██╗ ██║███████╗██║██║      ██║         ",
-            " ██║╚██╔╝██║██║   ██║   ██║   ██║██║   ██║██║╚██╗██║╚════██║██║██║      ██║         ",
+            " ██╔████╔██║██║   ██║   ██║   ██║██║   ██║██╔██╗ ██║███████╗██║██║      ██║        ",
+            " ██║╚██╔╝██║██║   ██║   ██║   ██║██║   ██║██║╚██╗██║╚════██║██║██║      ██║        ",
             " ██║ ╚═╝ ██║╚██████╔╝   ██║   ██║╚██████╔╝██║ ╚████║███████║██║╚██████╗╚██████╗ ⚡️ ",
             " ╚═╝     ╚═╝ ╚═════╝    ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝╚═╝ ╚═════╝ ╚═════╝    ",
             "",
@@ -259,19 +261,19 @@ local function open_right_terminal(cmd)
     vim.cmd("startinsert") 
 end
 
--- ===== WEB DEVELOPMENT SHORTCUTS (SAFARI) =====
--- Option + L: Start Live Server using Safari
+-- ===== WEB DEVELOPMENT SHORTCUTS (GOOGLE CHROME) =====
+-- Option + L: Start Live Server using Google Chrome
 vim.keymap.set("n", "<M-l>", function()
     vim.cmd("w") -- Auto-save
     local path = vim.fn.expand("%:p:h")
-    open_right_terminal("cd \"" .. path .. "\" && live-server --browser=\"safari\"")
-end, { noremap = true, silent = true, desc = "Live Server (Safari)" })
+    open_right_terminal("cd \"" .. path .. "\" && live-server --browser=\"google chrome\"")
+end, { noremap = true, silent = true, desc = "Live Server (Google Chrome)" })
 
--- Option + Shift + L: Quick Static Preview in Safari
+-- Option + Shift + L: Quick Static Preview in Google Chrome
 vim.keymap.set("n", "<M-L>", function()
     vim.cmd("w") -- Auto-save
-    vim.cmd("silent !open -a Safari %")
-end, { noremap = true, silent = true, desc = "Safari Preview" })
+    vim.cmd("silent !open -a \"Google Chrome\" %")
+end, { noremap = true, silent = true, desc = "Google Chrome Preview" })
 
 -- ===== BUILD & RUN LOGIC (C++, Python, Rust) =====
 -- Build Shortcut (Option + B)
@@ -280,10 +282,17 @@ vim.keymap.set("n", "<M-b>", function()
     local ft = vim.bo.filetype
     local file = vim.fn.expand("%:p")
     last_built_exe = vim.fn.expand("%:p:r")
+
+    -- Raylib MacOS Specific flags
+    -- Link Homebrew paths and required Apple Frameworks
+    local brew_inc = "-I/opt/homebrew/include"
+    local brew_lib = "-L/opt/homebrew/lib"
+    local mac_flags = "-lraylib -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo"
+
     if ft == "cpp" then
-        open_right_terminal(string.format("g++ -std=c++23 -Wall -Wextra \"%s\" -o \"%s\"", file, last_built_exe))
+        open_right_terminal(string.format("g++ -std=c++23 -Wall -Wextra %s %s \"%s\" -o \"%s\" %s", brew_inc, brew_lib, file, last_built_exe, mac_flags))
     elseif ft == "c" then
-        open_right_terminal(string.format("gcc -std=c17 -Wall -Wextra \"%s\" -o \"%s\"", file, last_built_exe))
+        open_right_terminal(string.format("gcc -std=c17 -Wall -Wextra %s %s \"%s\" -o \"%s\" %s", brew_inc, brew_lib, file, last_built_exe, mac_flags))
     elseif ft == "rust" then
         open_right_terminal(string.format("rustc \"%s\" -o \"%s\"", file, last_built_exe))
     end
@@ -307,8 +316,9 @@ vim.keymap.set("n", "<M-r>", function()
 end, { noremap = true, silent = true })
 
 -- ===== TERMINAL MANAGEMENT =====
--- Option + K: Kill the terminal/split (Terminal Mode)
-vim.keymap.set('t', '<M-k>', [[<C-\><C-n>:q!<CR>]], { noremap = true, silent = true })
+-- Option + T: Instantly kill terminal buffer and close split even during running loops
+vim.keymap.set('t', '<M-t>', [[<C-\><C-n>:termclose!<CR>]], { noremap = true, silent = true })
+vim.keymap.set('n', '<M-t>', ':bd!<CR>', { noremap = true, silent = true })
 vim.keymap.set("n", "<leader>t", function() open_right_terminal() end, { noremap = true, silent = true })
 
 -- Global Options
